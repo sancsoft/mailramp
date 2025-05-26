@@ -55,6 +55,12 @@ func loadConfig() (Config, error) {
 	return config, nil
 }
 
+func sendEmail(host string, auth smtp.Auth, from string, to string, message string) error {
+	msg := fmt.Sprintf("To: %s\r\n", to) + message
+	err := smtp.SendMail(host, auth, from, []string{to}, []byte(msg))
+	return err
+}
+
 func main() {
 
 	fmt.Println("MAILRAMP: Warm up an email domain with messages to a set of email adddresses.")
@@ -91,19 +97,58 @@ func main() {
 
 	// Authentication
 	auth := smtp.PlainAuth("", config.Server.User, config.Server.Password, config.Server.Host)
-	addr := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
+	host := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
 
-	// send the message to each recipient
+	// convert the messages per hour in to full and partial messages per minute
+	mpm := config.Rate / 60
+	ppm := config.Rate % 60
+	ppmerror := (ppm << 1) - 60
+
 	count := 0
-	for _, recipient := range recipients {
-		count += 1
-		fmt.Printf("%s: %05d: %s\n", time.Now().Format(time.RFC3339), count, recipient)
-		msg := fmt.Sprintf("To: %s\r\n", recipient) + message
-		err = smtp.SendMail(addr, auth, config.Sender, []string{recipient}, []byte(msg))
+
+	for {
+		// capture the start time and set the end time
+		startTime := time.Now()
+		endDuration, err := time.ParseDuration("60s")
 		if err != nil {
-			fmt.Println("Error sending email:", err)
+			fmt.Println("Error parsing duration:", err)
 			os.Exit(1)
 		}
+
+		// send the base messages per minute
+		for m := 0; m < mpm; m++ {
+			recipient := recipients[count%len(recipients)]
+			count += 1
+			fmt.Printf("%s: %05d: %s\n", time.Now().Format(time.RFC3339), count, recipient)
+			sendEmail(host, auth, config.Sender, recipient, message)
+			if err != nil {
+				fmt.Println("Error sending email:", err)
+				os.Exit(1)
+			}
+		}
+
+		// send another message if error has accumulated based on ppm
+		if ppmerror > 0 {
+			recipient := recipients[count%len(recipients)]
+			count += 1
+			fmt.Printf("%s: %05d: %s\n", time.Now().Format(time.RFC3339), count, recipient)
+			sendEmail(host, auth, config.Sender, recipient, message)
+			if err != nil {
+				fmt.Println("Error sending email:", err)
+				os.Exit(1)
+			}
+			ppmerror -= (60 << 1)
+		}
+
+		// increase the ppm error
+		ppmerror += (ppm << 1)
+
+		// wait out the rest of the minute
+		for {
+			if time.Since(startTime) > endDuration {
+				break
+			}
+			time.Sleep(time.Second)
+		}
 	}
-	fmt.Printf("%d email messages sent successfully", count)
 }
