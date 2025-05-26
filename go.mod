@@ -1,0 +1,3 @@
+module mailramp
+
+go 1.24.3
