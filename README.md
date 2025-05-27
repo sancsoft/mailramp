@@ -5,7 +5,7 @@ A simple tool for warming up an email domain or sending IP address
 
 Modern mail systems react to sudden changes in email volume by mail servers and domains. If a sudden change is detected in sending volume, spam filters will lock down and block delivery under the assumption that there is a problem.  Many orginizations refuse to alter their spam filtering configurations, even for legitimate reasons.
 
-Consistently delivering email to popular email providers and 
+Consistently delivering email to popular email providers and specific enterprise domains builds email reputation, which improves deliverability when email delivery spikes are needed.
 
 ## What You Will Need
 
